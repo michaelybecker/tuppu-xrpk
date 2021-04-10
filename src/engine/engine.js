@@ -39,4 +39,4 @@ export function loadScene(scene) {
     Camera.updateProjectionMatrix();
     Renderer.setSize(window.innerWidth, window.innerHeight);
   });
-};
+}

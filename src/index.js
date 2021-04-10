@@ -1,6 +1,6 @@
 import "./index.html";
 import "./style.css";
 import { loadScene } from "./engine/engine";
-import { scene } from "./examples/defaultscene";
+import { scene } from "./tuppu";
 
 loadScene(scene);

@@ -14,10 +14,12 @@
   "license": "ISC",
   "dependencies": {
     "cannon": "^0.6.2",
+    "croquet": "^0.1.7-lerna.0",
     "firebase": "^8.0.0",
     "inquirer": "^7.2.0",
     "speak-tts": "^2.0.8",
-    "three": "^0.122.0"
+    "three": "^0.122.0",
+    "troika-three-text": "^0.40.0"
   },
   "devDependencies": {
     "@babel/core": "^7.9.6",
