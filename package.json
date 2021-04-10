@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@croquet/croquet": "^0.4.1-1",
     "cannon": "^0.6.2",
     "croquet": "^0.1.7-lerna.0",
     "firebase": "^8.0.0",
