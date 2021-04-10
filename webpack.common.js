@@ -57,6 +57,20 @@ module.exports = {
         ],
       },
       {
+        test: /\.(ttf|woff|otf)$/,
+        use: [
+          {
+            loader: "file-loader",
+            options: {
+              esModule: false,
+              name: "[name].[ext]",
+              outputPath: "assets/fonts/",
+              publicPath: "assets/fonts/",
+            },
+          },
+        ],
+      },
+      {
         test: /\.(gltf)$/,
         use: [
           {

@@ -1,12 +1,15 @@
 // default scene loaded in src/engine/engine.js
 import * as Croquet from "@croquet/croquet";
+import PMAEventHandler from "pluto-mae";
 
 import { Text } from "troika-three-text";
 
 import { Scene, DirectionalLight, ShaderMaterial, Color } from "three";
 
+const clearSans = require("./fonts/ClearSans/ClearSans-Regular.ttf");
 const CURSOR_SPEED_MS = 500;
-const isVisible = true;
+
+let isVisible = true;
 
 const scene = new Scene();
 
@@ -55,7 +58,7 @@ tuppu: a simple, networked text editor
 - Ctrl+C, X, Z etc. works
 `;
 TextBox.text = introText;
-TextBox.font = "./fonts/ClearSans/ClearSans-Regular.ttf";
+TextBox.font = clearSans;
 TextBox.fontSize = 0.01;
 TextBox.position.z = -0.5;
 TextBox.text = introText;
@@ -145,23 +148,18 @@ class TuppuView extends Croquet.View {
     // this.subscribe("counter", "update", this.handleUpdate);
   }
 
-  // onclick() {
-  //     this.publish("counter", "reset");
-  // }
-
-  // handleUpdate(data) {
-  //     countDisplay.textContent = data;
-  // }
-
   handleUpdate(newString) {
     TextBox.text = newString == "" ? introText : newString;
     TextBox.sync();
   }
 }
 
+const pmaEventHandler = new PMAEventHandler();
+const xrpkAppId = pmaEventHandler.getAppState().appId;
+const name = xrpkAppId ? xrpkAppId : "tupputuppuwritemynameyes";
 Croquet.Session.join({
   appId: "com.plutovr.tuppu",
-  name: "tuppu",
+  name: name,
   password: "secret",
   model: TuppuModel,
   view: TuppuView,
