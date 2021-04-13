@@ -3,6 +3,7 @@ import * as Croquet from "@croquet/croquet";
 import PMAEventHandler from "pluto-mae";
 
 import { Text } from "troika-three-text";
+import State from "./engine/state";
 
 import { Scene, DirectionalLight, ShaderMaterial, Color } from "three";
 
@@ -12,6 +13,54 @@ const CURSOR_SPEED_MS = 500;
 let isVisible = true;
 
 const scene = new Scene();
+
+const UTIL_KEYS = [
+  "Shift",
+  "Enter",
+  "Alt",
+  "Control",
+  "Escape",
+  "Meta",
+  "Tab",
+  "Volume",
+  "AudioVolumeMute",
+  "F1",
+  "F2",
+  "F3",
+  "F4",
+  "F5",
+  "F6",
+  "F7",
+  "F8",
+  "F9",
+  "F10",
+  "F11",
+  "F12",
+];
+
+let TextDiv = "";
+
+const UpdateText = e => {
+  switch (e.keyCode) {
+    case 8: // backspace
+      TextDiv = TextDiv.slice(0, -1);
+      break;
+
+    case 13: // return
+      TextDiv += "\n";
+      break;
+
+    default:
+      // A-Z, nums, etc
+      if (UTIL_KEYS.includes(e.key)) {
+        return;
+      } else {
+        let key = e.key;
+        TextDiv += e.key;
+        break;
+      }
+  }
+};
 
 const GradientMaterial = new ShaderMaterial({
   uniforms: {
@@ -55,12 +104,12 @@ tuppu: a simple, networked text editor
 --------------------------------------
 - Use your keyboard to enter text
 - press both triggers to minimize / restore 
-- Ctrl+C, X, Z etc. works
+- Ctrl+C, X, V etc. works
 `;
 TextBox.text = introText;
 TextBox.font = clearSans;
 TextBox.fontSize = 0.01;
-TextBox.position.z = -0.5;
+TextBox.position.z = -0.25;
 TextBox.text = introText;
 
 // if gradient, color and outlinecolor don't take effect
@@ -100,26 +149,12 @@ window.addEventListener("keydown", e => {
 
 class TuppuModel extends Croquet.Model {
   init() {
-    // this.count = 0;
-    // this.subscribe("counter", "reset", this.resetCounter);
-    // this.future(1000).tick();
-
     this.subscribe("tuppomodel", "update-text-model", this.updateText);
+    this.textString = "";
   }
-
-  // resetCounter() {
-  //     this.count = 0;
-  //     this.publish("counter", "update", this.count);
-  // }
-
-  // tick() {
-  //     this.count++;
-  //     this.publish("counter", "update", this.count);
-  //     this.future(1000).tick();
-  // }
-
   updateText(text) {
-    this.publish("tuppoview", "update-text-view", text);
+    this.textString = text;
+    this.publish("tuppoview", "update-text-view", this.textString);
   }
 }
 
@@ -128,19 +163,15 @@ TuppuModel.register("TuppuModel");
 class TuppuView extends Croquet.View {
   constructor(model) {
     super(model);
+    this.sceneModel = model;
+    this.initText();
 
-    const TextDiv = document.querySelector(".text");
-    const focusWindow = e => {
-      TextDiv.focus();
-    };
-
-    window.addEventListener("focus", focusWindow);
     window.addEventListener("mousedown", e => {
       e.preventDefault();
     });
-    TextDiv.addEventListener("input", e => {
-      this.publish("tuppomodel", "update-text-model", TextDiv.value);
-      // let newString = TextDiv.value;
+    window.addEventListener("keydown", e => {
+      UpdateText(e);
+      this.publish("tuppomodel", "update-text-model", TextDiv);
     });
 
     this.subscribe("tuppoview", "update-text-view", this.handleUpdate);
@@ -151,6 +182,12 @@ class TuppuView extends Croquet.View {
   handleUpdate(newString) {
     TextBox.text = newString == "" ? introText : newString;
     TextBox.sync();
+  }
+
+  initText() {
+    if (this.sceneModel.textString != "") {
+      this.handleUpdate(this.sceneModel.textString);
+    }
   }
 }
 

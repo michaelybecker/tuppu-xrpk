@@ -9,7 +9,7 @@ import Physics from "./physics/physics";
 import XRInput from "./xrinput";
 
 export function loadScene(scene) {
-  scene.add(new EngineEditorCamera(Camera, Renderer.domElement));
+  // scene.add(new EngineEditorCamera(Camera, Renderer.domElement));
   Camera.audioListener = new AudioListener();
   Camera.add(Camera.audioListener);
   scene.add(Camera);
