@@ -4,9 +4,9 @@ import { AudioListener } from "three";
 import SessionHandler from "./util/webxr/sessionhandler";
 import Renderer from "./renderer";
 import XRInput from "./xrinput";
-
+import EngineEditorCamera from "./util/cameracontrols/engineeditorcamera";
 export function loadScene(scene) {
-  // scene.add(new EngineEditorCamera(Camera, Renderer.domElement));
+  scene.add(new EngineEditorCamera(Camera, Renderer.domElement));
   Camera.audioListener = new AudioListener();
   Camera.add(Camera.audioListener);
   scene.add(Camera);

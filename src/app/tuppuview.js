@@ -6,6 +6,8 @@ import {
   Scene,
   ShaderMaterial,
   Color,
+  Matrix4,
+  DoubleSide,
 } from "three";
 import { Text } from "troika-three-text";
 import Camera from "../engine/camera";
@@ -85,6 +87,7 @@ const GradientMaterial = new ShaderMaterial({
     }
 `,
 });
+GradientMaterial.side = DoubleSide;
 export default class TuppuView extends Croquet.View {
   constructor(model) {
     super(model);
@@ -118,7 +121,6 @@ export default class TuppuView extends Croquet.View {
   createTextbox() {
     this.TextBox = new Text();
     this.scene.add(this.TextBox);
-
     this.TextBox.text = INTRO_TEXT;
     this.TextBox.font = clearSans;
     this.TextBox.fontSize = 0.035;
@@ -134,6 +136,27 @@ export default class TuppuView extends Croquet.View {
 
     this.TextBox.maxWidth = 1;
     this.TextBox.sync();
+
+    // this.TextBoxReversed = new Text();
+    // this.scene.add(this.TextBoxReversed);
+    // this.TextBoxReversed.rotation.y = Math.PI;
+    // this.TextBoxReversed.text = INTRO_TEXT;
+    // this.TextBoxReversed.font = clearSans;
+    // this.TextBoxReversed.fontSize = 0.035;
+    // this.TextBoxReversed.position.z = -0.25;
+
+    // // if gradient, color and outlinecolor don't take effect
+    // this.TextBoxReversed.material = GradientMaterial;
+
+    // this.TextBoxReversed.color = 0xffffff;
+    // // this.TextBox.outlineColor = 0xc825fa;
+    // this.TextBoxReversed.outlineColor = 0x8925fa;
+    // this.TextBoxReversed.outlineBlur = "5%";
+
+    // this.TextBoxReversed.maxWidth = 1;
+    // this.TextBoxReversed.sync();
+
+    // this.TextBoxReversed.sync();
 
     let cursorVisible = true;
     // there *has* to be a less dumb blinking cursor implementation
@@ -154,6 +177,8 @@ export default class TuppuView extends Croquet.View {
   handleUpdate(newString) {
     this.TextBox.text = newString == "" ? INTRO_TEXT : newString;
     this.TextBox.sync();
+    // this.TextBoxReversed.text = newString == "" ? INTRO_TEXT : newString;
+    // this.TextBoxReversed.sync();
   }
 
   setAsOwner() {
@@ -170,6 +195,13 @@ export default class TuppuView extends Croquet.View {
     this.TextBox.position.copy(tempFrontVec);
     this.TextBox.lookAt(this.camProxy.position);
     this.TextBox.anchorX = "center";
+
+    // this.TextBoxReversed.position.copy(tempFrontVec);
+    // this.TextBoxReversed.lookAt(this.camProxy.position);
+    // this.TextBoxReversed.geometry.applyMatrix(
+    //   new Matrix4().makeRotationX(Math.PI / 2)
+    // );
+    // this.TextBoxReversed.anchorX = "center";
   }
   async asyncUpdateText(e) {
     if (!State.isOwner) return; // only owner can write
