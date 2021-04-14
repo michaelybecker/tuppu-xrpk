@@ -22,8 +22,8 @@ const CURSOR_SPEED_MS = 500;
 const INTRO_TEXT = `
 tuppu: a simple, networked text editor
 --------------------------------------
-- Use your keyboard to enter text
-- press both triggers to minimize / restore 
+- keyboard to enter text
+- hit both triggers to reset editor position 
 - Ctrl+X to CUT all text
 - Ctrl+C to COPY all text
 - Ctrl+V to PASTE from clipboard
@@ -171,7 +171,7 @@ export default class TuppuView extends Croquet.View {
     this.TextBox.lookAt(this.camProxy.position);
   }
   async asyncUpdateText(e) {
-    // if (!State.isOwner) return; // only owner can write
+    if (!State.isOwner) return; // only owner can write
     await this.handleLocalInput(e);
     this.publish("tuppomodel", "update-text-model", State.currentText);
   }
@@ -284,9 +284,15 @@ export default class TuppuView extends Croquet.View {
           300
         );
       } else {
-        resetTextPos();
+        this.resetTextPos();
         State._dblClick = false;
       }
+    });
+    State.eventHandler.addEventListener("xrsessionstarted", e => {
+      // hack campos bug
+      setTimeout(() => {
+        this.resetTextPos();
+      }, 10);
     });
   }
 }
