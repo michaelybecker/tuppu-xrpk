@@ -169,6 +169,7 @@ export default class TuppuView extends Croquet.View {
     this.camProxy.position.copy(tempCamVec);
     this.TextBox.position.copy(tempFrontVec);
     this.TextBox.lookAt(this.camProxy.position);
+    this.TextBox.anchorX = "center";
   }
   async asyncUpdateText(e) {
     if (!State.isOwner) return; // only owner can write
