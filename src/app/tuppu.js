@@ -16,7 +16,7 @@ const Tuppu = () => {
   console.log(`name is: ${name}`);
 
   Croquet.Session.join({
-    appId: "com.plutovr.tuppu2",
+    appId: "com.plutovr.tuppu1",
     name: name,
     password: "secret",
     model: TuppuModel,

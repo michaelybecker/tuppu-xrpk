@@ -3,8 +3,6 @@ import State from "./state";
 import { AudioListener } from "three";
 import SessionHandler from "./util/webxr/sessionhandler";
 import Renderer from "./renderer";
-import Physics from "./physics/physics";
-// import PhysicsSolver from './physics.worker.js';
 import XRInput from "./xrinput";
 
 export function loadScene(scene) {
@@ -19,8 +17,6 @@ export function loadScene(scene) {
     Renderer.render(scene, Camera);
     // INPUT
     if (State.isXRSession) XRInput.Update();
-    // PHYSICS
-    if (!State.isPaused) Physics.Update();
 
     // TRAVERSE UPDATE METHODS IN SCENE OBJECTS
     scene.traverse(obj => {

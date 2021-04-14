@@ -104,13 +104,12 @@ export default class TuppuView extends Croquet.View {
     this.initOwnerID();
     this.createTextbox();
     this.syncState();
+    this.initInputs();
 
     this.subscribe("tuppoview", "update-text-view", this.handleUpdate);
     this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
     this.subscribe("tuppoview", "reposition", this.reposition);
     this.subscribe("tuppoview", "reset-height", this.resetHeight);
-
-    this.initInputs();
   }
 
   resetHeight() {
@@ -160,6 +159,7 @@ export default class TuppuView extends Croquet.View {
   setAsOwner() {
     console.log(`tuppu: setting this instance as owner, ${this.viewId}`);
     State.isOwner = true;
+    this.resetTextPos(); // first time setup
   }
 
   reposition(data) {
