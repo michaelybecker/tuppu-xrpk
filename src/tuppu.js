@@ -4,16 +4,32 @@ import PMAEventHandler from "pluto-mae";
 
 import { Text } from "troika-three-text";
 import State from "./engine/state";
-
-import { Scene, DirectionalLight, ShaderMaterial, Color } from "three";
+import Camera from "./engine/camera";
+import {
+  Scene,
+  DirectionalLight,
+  ShaderMaterial,
+  Color,
+  Object3D,
+  Vector3,
+  Quaternion,
+} from "three";
 
 const clearSans = require("./fonts/ClearSans/ClearSans-Regular.ttf");
 const CURSOR_SPEED_MS = 500;
 
 let isVisible = true;
 State.currentText = "";
+State.debugMode = false;
 
 const scene = new Scene();
+
+const frontAnchor = new Object3D();
+frontAnchor.position.z -= 1;
+setTimeout(() => {
+  Camera.add(frontAnchor);
+  Camera.position.z += 1;
+}, 300);
 
 window.addEventListener("mousedown", e => {
   e.preventDefault();
@@ -90,16 +106,17 @@ tuppu: a simple, networked text editor
 `;
 TextBox.text = introText;
 TextBox.font = clearSans;
-TextBox.fontSize = 0.01;
+TextBox.fontSize = 0.035;
 TextBox.position.z = -0.25;
 TextBox.text = introText;
 
 // if gradient, color and outlinecolor don't take effect
 // TextBox.material = GradientMaterial;
 
-TextBox.color = 0x8925fa;
-TextBox.outlineColor = 0xc825fa;
-TextBox.outlineBlur = "10%";
+TextBox.color = 0xffffff;
+// TextBox.outlineColor = 0xc825fa;
+TextBox.outlineColor = 0x8925fa;
+TextBox.outlineBlur = "5%";
 
 TextBox.sync();
 
@@ -116,6 +133,20 @@ setInterval(() => {
 
   cursorVisible = !cursorVisible;
 }, CURSOR_SPEED_MS);
+
+const ResetTextPos = () => {
+  const tempCamVec = new Vector3();
+  const tempFrontVec = new Vector3();
+  const tempQuat = new Quaternion();
+  const tempScale = new Vector3();
+  const camProxy = new Object3D();
+
+  frontAnchor.matrixWorld.decompose(tempFrontVec, tempQuat, tempScale);
+  TextBox.position.copy(tempFrontVec);
+  Camera.matrixWorld.decompose(tempCamVec, tempQuat, tempScale);
+  camProxy.position.copy(tempCamVec);
+  TextBox.lookAt(camProxy.position);
+};
 
 const UpdateText = e => {
   switch (e.keyCode) {
@@ -166,6 +197,21 @@ window.addEventListener("keydown", e => {
       break;
     default:
       break;
+  }
+});
+
+State.eventHandler.addEventListener("selectstart", e => {
+  if (!State._dblClick) {
+    State._dblClick = true;
+    setTimeout(
+      function () {
+        State._dblClick = false;
+      }.bind(this),
+      300
+    );
+  } else {
+    ResetTextPos();
+    State._dblClick = false;
   }
 });
 

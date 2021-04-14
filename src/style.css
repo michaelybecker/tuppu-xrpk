@@ -3,6 +3,7 @@ body {
   font-family: "Montserrat", sans-serif;
   font-size: 1.25em;
   overflow: hidden;
+  background-color: black;
 }
 
 .info {
