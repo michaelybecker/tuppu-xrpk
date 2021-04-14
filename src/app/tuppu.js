@@ -3,17 +3,15 @@
 
 import * as Croquet from "@croquet/croquet";
 import PMAEventHandler from "pluto-mae";
-
 import TuppuModel from "./tuppumodel";
 import TuppuView from "./tuppuview";
 
 const Tuppu = () => {
-  TuppuModel.register("TuppuModel");
-
   const pmaEventHandler = new PMAEventHandler();
   const xrpkAppId = pmaEventHandler.getAppState().appId;
-  const name = xrpkAppId ? xrpkAppId : "tupputuppuwritemynameyes";
-  console.log(`name is: ${name}`);
+  const name = xrpkAppId ? xrpkAppId : "tuppuname";
+
+  TuppuModel.register("TuppuModel");
 
   Croquet.Session.join({
     appId: "com.plutovr.tuppu1",
@@ -24,5 +22,4 @@ const Tuppu = () => {
     autoSleep: false,
   });
 };
-
 export default Tuppu;
