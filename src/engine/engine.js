@@ -1,7 +1,6 @@
 import Camera from "./camera";
 import State from "./state";
 import { AudioListener } from "three";
-import EngineEditorCamera from "./util/cameracontrols/engineeditorcamera";
 import SessionHandler from "./util/webxr/sessionhandler";
 import Renderer from "./renderer";
 import Physics from "./physics/physics";

@@ -1,6 +1,5 @@
 import "./index.html";
 import "./style.css";
-import { loadScene } from "./engine/engine";
-import { scene } from "./tuppu";
+import Tuppu from "./app/tuppu";
 
-loadScene(scene);
+const tuppu = new Tuppu();

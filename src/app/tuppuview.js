@@ -1,38 +1,33 @@
-// TODO:
-// Bump lines as networked event
-// proper caret?
-
 import * as Croquet from "@croquet/croquet";
-import PMAEventHandler from "pluto-mae";
-
-import { Text } from "troika-three-text";
-import State from "./engine/state";
-import Camera from "./engine/camera";
 import {
-  Scene,
-  DirectionalLight,
-  ShaderMaterial,
-  Color,
   Object3D,
   Vector3,
   Quaternion,
+  Scene,
+  ShaderMaterial,
+  Color,
 } from "three";
+import { Text } from "troika-three-text";
+import Camera from "../engine/camera";
+import { loadScene } from "../engine/engine";
+import State from "../engine/state";
 
-const clearSans = require("./fonts/ClearSans/ClearSans-Regular.ttf");
-const CURSOR_SPEED_MS = 500;
+const clearSans = require("../fonts/ClearSans/ClearSans-Regular.ttf");
 
-let isOwner = false;
+State.isOwner = false;
 State.currentText = "";
 State.debugMode = false;
 
-const scene = new Scene();
-
-const frontAnchor = new Object3D();
-frontAnchor.position.z -= 1;
-setTimeout(() => {
-  Camera.add(frontAnchor);
-  Camera.position.z += 1;
-}, 300);
+const CURSOR_SPEED_MS = 500;
+const INTRO_TEXT = `
+tuppu: a simple, networked text editor
+--------------------------------------
+- Use your keyboard to enter text
+- press both triggers to minimize / restore 
+- Ctrl+X to CUT all text
+- Ctrl+C to COPY all text
+- Ctrl+V to PASTE from clipboard
+`;
 
 const UTIL_KEYS = [
   "Shift",
@@ -90,96 +85,42 @@ const GradientMaterial = new ShaderMaterial({
     }
 `,
 });
-
-State.eventHandler.addEventListener("selectstart", e => {
-  if (!isOwner) return;
-
-  if (!State._dblClick) {
-    State._dblClick = true;
-    setTimeout(
-      function () {
-        State._dblClick = false;
-      }.bind(this),
-      300
-    );
-  } else {
-    ResetTextPos();
-    State._dblClick = false;
-  }
-});
-
-//Croquet
-
-class TuppuModel extends Croquet.Model {
-  init() {
-    this.subscribe("tuppomodel", "update-text-model", this.updateText);
-    this.subscribe("tuppomodel", "set-ownerid", this.setOwnerID);
-    this.subscribe("tuppomodel", "reposition", this.reposition);
-    this.textString = "";
-  }
-  updateText(newString) {
-    this.textString = newString;
-    this.publish("tuppoview", "update-text-view", newString);
-  }
-
-  reposition(data) {
-    this.posData = data;
-    this.publish("tuppoview", "reposition", data);
-  }
-
-  setOwnerID(viewID) {
-    if (!this.ownerID) {
-      this.ownerID = viewID;
-      this.publish("tuppoview", "set-as-owner");
-    } else {
-      console.log(`tuppu: ownerID is: ${this.ownerID}`);
-    }
-  }
-}
-
-TuppuModel.register("TuppuModel");
-
-class TuppuView extends Croquet.View {
+export default class TuppuView extends Croquet.View {
   constructor(model) {
     super(model);
-    this.sceneModel = model;
-    this.initOwnerID();
 
+    this.scene = new Scene();
+    loadScene(this.scene);
+    this.sceneModel = model;
+
+    this.frontAnchor = new Object3D();
+    this.frontAnchor.position.z -= 1;
+    setTimeout(() => {
+      Camera.add(this.frontAnchor);
+      Camera.position.z += 1;
+    }, 300);
+    this.camProxy = new Object3D();
+
+    this.initOwnerID();
     this.createTextbox();
     this.syncState();
 
     this.subscribe("tuppoview", "update-text-view", this.handleUpdate);
     this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
     this.subscribe("tuppoview", "reposition", this.reposition);
+    this.subscribe("tuppoview", "reset-height", this.resetHeight);
 
-    window.addEventListener("keydown", this.asyncUpdateText.bind(this));
-    window.addEventListener("mousedown", e => {
-      e.preventDefault();
-    });
-
-    window.addEventListener("keyup", e => {
-      if (e.keyCode == 17) {
-        // ctrl
-        State.ctrlDown = false;
-      }
-    });
+    this.initInputs();
   }
 
+  resetHeight() {
+    this.TextBox.anchorY = "70%";
+  }
   createTextbox() {
     this.TextBox = new Text();
-    scene.add(this.TextBox);
+    this.scene.add(this.TextBox);
 
-    // Set properties to configure:
-    this.introText = `
-    tuppu: a simple, networked text editor
-    --------------------------------------
-    - Use your keyboard to enter text
-    - press both triggers to minimize / restore 
-    - Ctrl+X to CUT all text
-    - Ctrl+C to COPY all text
-    - Ctrl+V to PASTE from clipboard
-    `;
-    this.TextBox.text = this.introText;
+    this.TextBox.text = INTRO_TEXT;
     this.TextBox.font = clearSans;
     this.TextBox.fontSize = 0.035;
     this.TextBox.position.z = -0.25;
@@ -208,18 +149,17 @@ class TuppuView extends Croquet.View {
           );
         }
       }
-
       cursorVisible = !cursorVisible;
     }, CURSOR_SPEED_MS);
   }
   handleUpdate(newString) {
-    this.TextBox.text = newString == "" ? this.introText : newString;
+    this.TextBox.text = newString == "" ? INTRO_TEXT : newString;
     this.TextBox.sync();
   }
 
   setAsOwner() {
     console.log(`tuppu: setting this instance as owner, ${this.viewId}`);
-    isOwner = true;
+    State.isOwner = true;
   }
 
   reposition(data) {
@@ -231,7 +171,7 @@ class TuppuView extends Croquet.View {
     this.TextBox.lookAt(this.camProxy.position);
   }
   async asyncUpdateText(e) {
-    // if (!isOwner) return; // only owner can write
+    // if (!State.isOwner) return; // only owner can write
     await this.handleLocalInput(e);
     this.publish("tuppomodel", "update-text-model", State.currentText);
   }
@@ -246,8 +186,9 @@ class TuppuView extends Croquet.View {
       State.currentText = this.sceneModel.textString;
     }
 
-    if (this.sceneModel.posData)
-      this.publish("tuppoview", "reposition", this.sceneModel.posData);
+    if (this.sceneModel.posData) {
+      this.reposition(this.sceneModel.posData);
+    }
   }
 
   handleLocalInput(e) {
@@ -261,7 +202,7 @@ class TuppuView extends Croquet.View {
 
         case 13: // enter
           State.currentText += "\n";
-          this.TextBox.anchorY = "70%";
+          this.publish("tuppomodel", "reset-height");
           resolve();
           break;
 
@@ -305,37 +246,47 @@ class TuppuView extends Croquet.View {
     });
   }
 
-  ResetTextPos() {
+  resetTextPos() {
     const tempCamVec = new Vector3();
     const tempFrontVec = new Vector3();
     const tempQuat = new Quaternion();
     const tempScale = new Vector3();
-    this.camProxy = new Object3D();
 
-    frontAnchor.matrixWorld.decompose(tempFrontVec, tempQuat, tempScale);
+    this.frontAnchor.matrixWorld.decompose(tempFrontVec, tempQuat, tempScale);
     Camera.matrixWorld.decompose(tempCamVec, tempQuat, tempScale);
-    // camProxy.position.copy(tempCamVec);
-    // this.TextBox.position.copy(tempFrontVec);
-    // this.TextBox.lookAt(camProxy.position);
     const tempCamVecArr = tempCamVec.toArray();
     const tempFrontVecArr = tempFrontVec.toArray();
     const data = { tempCamVecArr, tempFrontVecArr };
     this.publish("tuppomodel", "reposition", data);
   }
+
+  initInputs() {
+    window.addEventListener("keydown", this.asyncUpdateText.bind(this));
+    window.addEventListener("mousedown", e => {
+      e.preventDefault();
+    });
+    window.addEventListener("keyup", e => {
+      if (e.key == "Control") {
+        // ctrl
+        State.ctrlDown = false;
+      }
+    });
+
+    State.eventHandler.addEventListener("selectstart", e => {
+      if (!State.isOwner) return;
+
+      if (!State._dblClick) {
+        State._dblClick = true;
+        setTimeout(
+          function () {
+            State._dblClick = false;
+          }.bind(this),
+          300
+        );
+      } else {
+        resetTextPos();
+        State._dblClick = false;
+      }
+    });
+  }
 }
-
-const pmaEventHandler = new PMAEventHandler();
-const xrpkAppId = pmaEventHandler.getAppState().appId;
-const name = xrpkAppId ? xrpkAppId : "tupputuppuwritemynameyes";
-console.log(`name is: ${name}`);
-
-Croquet.Session.join({
-  appId: "com.plutovr.tuppu2",
-  name: name,
-  password: "secret",
-  model: TuppuModel,
-  view: TuppuView,
-  autoSleep: false,
-});
-
-export { scene };
