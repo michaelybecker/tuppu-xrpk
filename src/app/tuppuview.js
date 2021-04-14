@@ -125,6 +125,7 @@ export default class TuppuView extends Croquet.View {
     this.TextBox.font = clearSans;
     this.TextBox.fontSize = 0.035;
     this.TextBox.position.z = -0.25;
+    this.TextBox.curveRadius = 0.75;
 
     // if gradient, color and outlinecolor don't take effect
     this.TextBox.material = GradientMaterial;
@@ -204,7 +205,7 @@ export default class TuppuView extends Croquet.View {
     // this.TextBoxReversed.anchorX = "center";
   }
   async asyncUpdateText(e) {
-    if (!State.isOwner) return; // only owner can write
+    // if (!State.isOwner) return; // only owner can write
     await this.handleLocalInput(e);
     this.publish("tuppomodel", "update-text-model", State.currentText);
   }
