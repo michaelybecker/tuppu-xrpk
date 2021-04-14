@@ -1,4 +1,7 @@
-// default scene loaded in src/engine/engine.js
+// TODO:
+// Bump lines as networked event
+// proper caret?
+
 import * as Croquet from "@croquet/croquet";
 import PMAEventHandler from "pluto-mae";
 
@@ -18,7 +21,7 @@ import {
 const clearSans = require("./fonts/ClearSans/ClearSans-Regular.ttf");
 const CURSOR_SPEED_MS = 500;
 
-let isVisible = true;
+let isOwner;
 State.currentText = "";
 State.debugMode = false;
 
@@ -57,6 +60,10 @@ const UTIL_KEYS = [
   "F10",
   "F11",
   "F12",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
 ];
 
 const GradientMaterial = new ShaderMaterial({
@@ -101,8 +108,9 @@ tuppu: a simple, networked text editor
 --------------------------------------
 - Use your keyboard to enter text
 - press both triggers to minimize / restore 
-- Ctrl+V to paste
-- Ctrl+C to copy all text
+- Ctrl+X to CUT all text
+- Ctrl+C to COPY all text
+- Ctrl+V to PASTE from clipboard
 `;
 TextBox.text = introText;
 TextBox.font = clearSans;
@@ -111,22 +119,23 @@ TextBox.position.z = -0.25;
 TextBox.text = introText;
 
 // if gradient, color and outlinecolor don't take effect
-// TextBox.material = GradientMaterial;
+TextBox.material = GradientMaterial;
 
 TextBox.color = 0xffffff;
 // TextBox.outlineColor = 0xc825fa;
 TextBox.outlineColor = 0x8925fa;
 TextBox.outlineBlur = "5%";
 
+TextBox.maxWidth = 1;
 TextBox.sync();
 
 let cursorVisible = true;
 // there *has* to be a less dumb blinking cursor implementation
 setInterval(() => {
   if (cursorVisible == true) {
-    TextBox.text += "_";
+    TextBox.text += "|";
   } else {
-    if (TextBox.text[TextBox.text.length - 1] == "_") {
+    if (TextBox.text[TextBox.text.length - 1] == "|") {
       TextBox.text = TextBox.text.substring(0, TextBox.text.length - 1);
     }
   }
@@ -149,58 +158,62 @@ const ResetTextPos = () => {
 };
 
 const UpdateText = e => {
-  switch (e.keyCode) {
-    case 8: // backspace
-      if (State.currentText.length == 0) break;
-      State.currentText = State.currentText.slice(0, -1);
-      break;
-
-    case 13: // return
-      State.currentText += "\n";
-      break;
-
-    case 17: // ctrl
-      State.ctrlDown = true;
-
-    default:
-      // A-Z, nums, etc
-      if (UTIL_KEYS.includes(e.key)) {
-        return;
-      } else {
-        if (State.ctrlDown) {
-          if (e.keyCode == 67) {
-            console.log("Text copied!");
-
-            navigator.clipboard.writeText(State.currentText);
-            navigator.clipboard.readText().then(clipText => {
-              console.log(clipText);
-            });
-          } else if (e.keyCode == 86) {
-            console.log("paste");
-            navigator.clipboard
-              .readText()
-              .then(clipText => (State.currentText += clipText));
-          }
-        } else {
-          State.currentText += e.key;
-        }
-
+  return new Promise(resolve => {
+    switch (e.keyCode) {
+      case 8: // backspace
+        if (State.currentText.length == 0) break;
+        State.currentText = State.currentText.slice(0, -1);
+        resolve();
         break;
-      }
-  }
+
+      case 13: // return
+        State.currentText += "\n";
+        TextBox.anchorY = "70%";
+        resolve();
+        break;
+
+      case 17: // ctrl
+        resolve();
+        State.ctrlDown = true;
+
+      default:
+        // A-Z, nums, etc
+        if (UTIL_KEYS.includes(e.key)) {
+          resolve();
+          return;
+        } else {
+          if (State.ctrlDown) {
+            if (e.key == "c") {
+              navigator.clipboard
+                .writeText(State.currentText)
+                .then(console.warn("tuppu: copied text"));
+            } else if (e.key == "x") {
+              navigator.clipboard.writeText(State.currentText);
+              navigator.clipboard.readText().then(clipText => {
+                State.currentText = "";
+                console.warn("tuppu: cut text");
+                resolve();
+              });
+            } else if (e.key == "v") {
+              navigator.clipboard.readText().then(clipText => {
+                State.currentText += clipText;
+                console.warn("tuppu: paste complete");
+                resolve();
+              });
+            }
+          } else {
+            State.currentText += e.key;
+            resolve();
+          }
+          break;
+        }
+    }
+  });
 };
 
-window.addEventListener("keydown", e => {
-  switch (e.key) {
-    case "Enter":
-      TextBox.anchorY = "70%";
-      break;
-    default:
-      break;
-  }
-});
-
 State.eventHandler.addEventListener("selectstart", e => {
+  if (!isOwner) return;
+
   if (!State._dblClick) {
     State._dblClick = true;
     setTimeout(
@@ -231,9 +244,9 @@ class TuppuModel extends Croquet.Model {
   setOwnerID(viewID) {
     if (!this.ownerID) {
       this.ownerID = viewID;
-      console.log(`setting viewID to ${viewID}`);
+      this.publish("tuppoview", "set-as-owner");
     } else {
-      console.log(`ownerID exists: ${this.ownerID}`);
+      console.log(`tuppu: ownerID is: ${this.ownerID}`);
     }
   }
 }
@@ -249,13 +262,10 @@ class TuppuView extends Croquet.View {
     this.initOwnerID();
 
     this.subscribe("tuppoview", "update-text-view", this.handleUpdate);
-    // countDisplay.onclick = event => this.onclick(event);
-    // this.subscribe("counter", "update", this.handleUpdate);
+    this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
 
-    window.addEventListener("keydown", e => {
-      UpdateText(e);
-      this.publish("tuppomodel", "update-text-model", State.currentText);
-    });
+    window.addEventListener("keydown", this.asyncUpdateText.bind(this));
+
     window.addEventListener("keyup", e => {
       if (e.keyCode == 17) {
         // ctrl
@@ -267,6 +277,18 @@ class TuppuView extends Croquet.View {
   handleUpdate(newString) {
     TextBox.text = newString == "" ? introText : newString;
     TextBox.sync();
+  }
+
+  setAsOwner() {
+    console.log(`tuppu: setting this instance as owner, ${this.viewId}`);
+    isOwner = true;
+  }
+
+  async asyncUpdateText(e) {
+    if (!isOwner) return; // only owner can write
+
+    await UpdateText(e);
+    this.publish("tuppomodel", "update-text-model", State.currentText);
   }
 
   initOwnerID() {
@@ -284,7 +306,7 @@ const pmaEventHandler = new PMAEventHandler();
 const xrpkAppId = pmaEventHandler.getAppState().appId;
 const name = xrpkAppId ? xrpkAppId : "tupputuppuwritemynameyes";
 Croquet.Session.join({
-  appId: "com.plutovr.tuppu8",
+  appId: "com.plutovr.tuppu12",
   name: name,
   password: "secret",
   model: TuppuModel,
