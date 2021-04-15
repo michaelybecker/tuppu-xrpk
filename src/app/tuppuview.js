@@ -15,19 +15,56 @@ import { loadScene } from "../engine/engine";
 import State from "../engine/state";
 
 const clearSans = require("../fonts/ClearSans/ClearSans-Regular.ttf");
+const CedarvilleCursive = require("../fonts/CedarvilleCursive-Regular.ttf");
+const Gruppo = require("../fonts/Gruppo-Regular.ttf");
+const MerriweatherItalic = require("../fonts/Merriweather-Italic.ttf");
+const MerriweatherLight = require("../fonts/Merriweather-Light.ttf");
+const Parisienne = require("../fonts/Parisienne-Regular.ttf");
+const PirataOne = require("../fonts/PirataOne-Regular.ttf");
+const PoiretOne = require("../fonts/PoiretOne-Regular.ttf");
+const PressStart2P = require("../fonts/PressStart2P-Regular.ttf");
+const Quicksand = require("../fonts/Quicksand-VariableFont_wght.ttf");
+const RobotoMono = require("../fonts/RobotoMono-Italic-VariableFont_wght.ttf");
+const Sail = require("../fonts/Sail-Regular.ttf");
+const SpecialElite = require("../fonts/SpecialElite-Regular.ttf");
+const ZenDots = require("../fonts/ZenDots-Regular.ttf");
+const ZillaSlabHighlightBold = require("../fonts/ZillaSlabHighlight-Bold.ttf");
+const ZillaSlabHighlight = require("../fonts/ZillaSlabHighlight-Regular.ttf");
+
+const fontArr = [
+  clearSans,
+  CedarvilleCursive,
+  Gruppo,
+  MerriweatherItalic,
+  MerriweatherLight,
+  Parisienne,
+  PirataOne,
+  PoiretOne,
+  PressStart2P,
+  Quicksand,
+  RobotoMono,
+  Sail,
+  SpecialElite,
+  ZenDots,
+  ZillaSlabHighlight,
+  ZillaSlabHighlightBold,
+];
+State.fontArrIndex = 0;
+State.fontSize = 0.035;
+State.currentText = "";
 
 State.isOwner = false;
-State.currentText = "";
 State.debugMode = false;
 
 const CURSOR_SPEED_MS = 500;
 const INTRO_TEXT = `
 tuppu: a simple, networked text editor
 --------------------------------------
-- keyboard to enter text
-- hit both triggers to reset editor position 
-- Ctrl+X to CUT all text
-- Ctrl+C to COPY all text
+- hit both triggers to RESET editor position 
+- Ctrl+left/right arrow keys to CHANGE FONT
+- Ctrl+up/down arrow keys to CHANGE SIZE
+- Ctrl+X to CLEAR all text
+- Ctrl+C to COPY all textew
 - Ctrl+V to PASTE from clipboard
 `;
 
@@ -113,6 +150,8 @@ export default class TuppuView extends Croquet.View {
     this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
     this.subscribe("tuppoview", "reposition", this.reposition);
     this.subscribe("tuppoview", "reset-height", this.resetHeight);
+    this.subscribe("tuppoview", "update-text-font", this.updateTextFont);
+    this.subscribe("tuppoview", "update-text-size", this.updateTextSize);
   }
 
   resetHeight() {
@@ -122,8 +161,8 @@ export default class TuppuView extends Croquet.View {
     this.TextBox = new Text();
     this.scene.add(this.TextBox);
     this.TextBox.text = INTRO_TEXT;
-    this.TextBox.font = clearSans;
-    this.TextBox.fontSize = 0.035;
+    this.TextBox.font = fontArr[State.fontArrIndex];
+    this.TextBox.fontSize = State.fontSize;
     this.TextBox.position.z = -0.25;
     this.TextBox.curveRadius = 0.75;
 
@@ -137,27 +176,6 @@ export default class TuppuView extends Croquet.View {
 
     this.TextBox.maxWidth = 1;
     this.TextBox.sync();
-
-    // this.TextBoxReversed = new Text();
-    // this.scene.add(this.TextBoxReversed);
-    // this.TextBoxReversed.rotation.y = Math.PI;
-    // this.TextBoxReversed.text = INTRO_TEXT;
-    // this.TextBoxReversed.font = clearSans;
-    // this.TextBoxReversed.fontSize = 0.035;
-    // this.TextBoxReversed.position.z = -0.25;
-
-    // // if gradient, color and outlinecolor don't take effect
-    // this.TextBoxReversed.material = GradientMaterial;
-
-    // this.TextBoxReversed.color = 0xffffff;
-    // // this.TextBox.outlineColor = 0xc825fa;
-    // this.TextBoxReversed.outlineColor = 0x8925fa;
-    // this.TextBoxReversed.outlineBlur = "5%";
-
-    // this.TextBoxReversed.maxWidth = 1;
-    // this.TextBoxReversed.sync();
-
-    // this.TextBoxReversed.sync();
 
     let cursorVisible = true;
     // there *has* to be a less dumb blinking cursor implementation
@@ -178,8 +196,6 @@ export default class TuppuView extends Croquet.View {
   handleUpdate(newString) {
     this.TextBox.text = newString == "" ? INTRO_TEXT : newString;
     this.TextBox.sync();
-    // this.TextBoxReversed.text = newString == "" ? INTRO_TEXT : newString;
-    // this.TextBoxReversed.sync();
   }
 
   setAsOwner() {
@@ -196,16 +212,9 @@ export default class TuppuView extends Croquet.View {
     this.TextBox.position.copy(tempFrontVec);
     this.TextBox.lookAt(this.camProxy.position);
     this.TextBox.anchorX = "center";
-
-    // this.TextBoxReversed.position.copy(tempFrontVec);
-    // this.TextBoxReversed.lookAt(this.camProxy.position);
-    // this.TextBoxReversed.geometry.applyMatrix(
-    //   new Matrix4().makeRotationX(Math.PI / 2)
-    // );
-    // this.TextBoxReversed.anchorX = "center";
   }
   async asyncUpdateText(e) {
-    // if (!State.isOwner) return; // only owner can write
+    if (!State.isOwner) return; // only owner can write
     await this.handleLocalInput(e);
     this.publish("tuppomodel", "update-text-model", State.currentText);
   }
@@ -223,8 +232,48 @@ export default class TuppuView extends Croquet.View {
     if (this.sceneModel.posData) {
       this.reposition(this.sceneModel.posData);
     }
+
+    if (this.sceneModel.fontArrIndex != State.fontArrIndex) {
+      State.fontArrIndex = this.sceneModel.fontArrIndex;
+      this.updateTextFont(State.fontArrIndex);
+    }
+    if (this.sceneModel.fontSize != State.fontSize) {
+      State.fontSize = this.sceneModel.fontSize;
+      this.updateTextSize(State.fontSize);
+    }
   }
 
+  broadcastFontArrIndexUpdate(dir) {
+    if (State.fontArrIndex + dir > fontArr.length - 1) {
+      State.fontArrIndex = 0;
+    } else if (State.fontArrIndex + dir < 0) {
+      State.fontArrIndex = fontArr.length - 1;
+    } else State.fontArrIndex += dir;
+    this.publish("tuppomodel", "update-text-font", State.fontArrIndex);
+  }
+
+  broadcastFontSizeUpdate(dir) {
+    switch (dir) {
+      case 1:
+        State.fontSize += 0.005;
+        break;
+      case -1:
+        State.fontSize -= 0.005;
+        break;
+      default:
+        break;
+    }
+    this.publish("tuppomodel", "update-text-size", State.fontSize);
+  }
+
+  updateTextFont(fontArrIndex) {
+    this.TextBox.font = fontArr[fontArrIndex];
+    this.TextBox.sync();
+  }
+  updateTextSize(fontSize) {
+    this.TextBox.fontSize = fontSize;
+    this.TextBox.sync();
+  }
   handleLocalInput(e) {
     return new Promise(resolve => {
       switch (e.keyCode) {
@@ -246,36 +295,42 @@ export default class TuppuView extends Croquet.View {
 
         default:
           // A-Z, nums, etc
-          if (UTIL_KEYS.includes(e.key)) {
+          if (State.ctrlDown) {
+            if (e.key == "c") {
+              navigator.clipboard.writeText(State.currentText).then(e => {
+                console.warn("tuppu: copied text");
+                resolve();
+              });
+            } else if (e.key == "x") {
+              //   navigator.clipboard.writeText(State.currentText);
+              //   navigator.clipboard.readText().then(clipText => {
+              State.currentText = "";
+              console.warn("tuppu: clear text");
+              resolve();
+              //   });
+            } else if (e.key == "v") {
+              navigator.clipboard.readText().then(clipText => {
+                State.currentText += clipText;
+                console.warn("tuppu: pasted clipboard");
+                resolve();
+              });
+            } else if (e.key == "ArrowLeft") {
+              this.broadcastFontArrIndexUpdate(-1);
+            } else if (e.key == "ArrowRight") {
+              this.broadcastFontArrIndexUpdate(1);
+            } else if (e.key == "ArrowUp") {
+              this.broadcastFontSizeUpdate(1);
+            } else if (e.key == "ArrowDown") {
+              this.broadcastFontSizeUpdate(-1);
+            }
+          } else if (UTIL_KEYS.includes(e.key)) {
             resolve();
             return;
           } else {
-            if (State.ctrlDown) {
-              if (e.key == "c") {
-                navigator.clipboard.writeText(State.currentText).then(e => {
-                  console.warn("tuppu: copied text");
-                  resolve();
-                });
-              } else if (e.key == "x") {
-                navigator.clipboard.writeText(State.currentText);
-                navigator.clipboard.readText().then(clipText => {
-                  State.currentText = "";
-                  console.warn("tuppu: cut text");
-                  resolve();
-                });
-              } else if (e.key == "v") {
-                navigator.clipboard.readText().then(clipText => {
-                  State.currentText += clipText;
-                  console.warn("tuppu: pasted clipboard");
-                  resolve();
-                });
-              }
-            } else {
-              State.currentText += e.key;
-              resolve();
-            }
-            break;
+            State.currentText += e.key;
+            resolve();
           }
+          break;
       }
     });
   }
