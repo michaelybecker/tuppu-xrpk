@@ -8,11 +8,19 @@ import {
   Color,
   Matrix4,
   DoubleSide,
+  Raycaster,
+  MeshBasicMaterial,
+  BufferGeometry,
+  LineBasicMaterial,
+  Line,
 } from "three";
 import { Text } from "troika-three-text";
 import Camera from "../engine/camera";
+import Renderer from "../engine/renderer";
 import { loadScene } from "../engine/engine";
 import State from "../engine/state";
+import { v4 as uuidv4 } from "uuid";
+const utils = require("./utils");
 
 const clearSans = require("../fonts/ClearSans/ClearSans-Regular.ttf");
 const CedarvilleCursive = require("../fonts/CedarvilleCursive-Regular.ttf");
@@ -52,20 +60,23 @@ const fontArr = [
 State.fontArrIndex = 0;
 State.fontSize = 0.035;
 State.currentText = "";
+State.isFocused = true;
 
-State.isOwner = false;
+// State.isOwner = false;
 State.debugMode = false;
 
 const CURSOR_SPEED_MS = 500;
 const INTRO_TEXT = `
 tuppu: a simple, networked text editor
 --------------------------------------
-- hit both triggers to RESET editor position 
+- Drag around to reposition
+- hit both triggers to RESET editor position
 - Ctrl+left/right arrow keys to CHANGE FONT
 - Ctrl+up/down arrow keys to CHANGE SIZE
 - Ctrl+X to CLEAR all text
-- Ctrl+C to COPY all textew
+- Ctrl+C to COPY all text
 - Ctrl+V to PASTE from clipboard
+- aim outside the text and hit trigger to UNFOCUS
 `;
 
 const UTIL_KEYS = [
@@ -98,8 +109,8 @@ const UTIL_KEYS = [
 
 const GradientMaterial = new ShaderMaterial({
   uniforms: {
-    vlak3color1: { value: new Color("#31c7de") },
-    vlak3color2: { value: new Color("#de3c31") },
+    color1: { value: new Color("#31c7de") },
+    color2: { value: new Color("#de3c31") },
   },
   vertexShader: `
  
@@ -112,19 +123,23 @@ const GradientMaterial = new ShaderMaterial({
   `,
   fragmentShader: `
      
-   uniform vec3 vlak3color1;
-    uniform vec3 vlak3color2;
+   uniform vec3 color1;
+    uniform vec3 color2;
 
  
     varying vec3 vUv;
 
     void main() {     
      
-      gl_FragColor = vec4(mix(vlak3color1, vlak3color2, vUv.x+vUv.y), 1.0);
+      gl_FragColor = vec4(mix(color1, color2, vUv.x+vUv.y), 1.0);
     }
 `,
 });
 GradientMaterial.side = DoubleSide;
+
+const FocusedMaterial = new MeshBasicMaterial({ color: 0xffff00 });
+FocusedMaterial.side = DoubleSide;
+
 export default class TuppuView extends Croquet.View {
   constructor(model) {
     super(model);
@@ -141,17 +156,18 @@ export default class TuppuView extends Croquet.View {
     }, 300);
     this.camProxy = new Object3D();
 
-    this.initOwnerID();
+    // this.initOwnerID();
     this.createTextbox();
     this.syncState();
     this.initInputs();
 
     this.subscribe("tuppoview", "update-text-view", this.handleUpdate);
-    this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
+    // this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
     this.subscribe("tuppoview", "reposition", this.reposition);
     this.subscribe("tuppoview", "reset-height", this.resetHeight);
     this.subscribe("tuppoview", "update-text-font", this.updateTextFont);
     this.subscribe("tuppoview", "update-text-size", this.updateTextSize);
+    this.subscribe("tuppoview", "change-focus", this.changeFocus);
   }
 
   resetHeight() {
@@ -159,6 +175,7 @@ export default class TuppuView extends Croquet.View {
   }
   createTextbox() {
     this.TextBox = new Text();
+    this.TextBox.modelId = uuidv4();
     this.scene.add(this.TextBox);
     this.TextBox.text = INTRO_TEXT;
     this.TextBox.font = fontArr[State.fontArrIndex];
@@ -169,10 +186,10 @@ export default class TuppuView extends Croquet.View {
     // if gradient, color and outlinecolor don't take effect
     this.TextBox.material = GradientMaterial;
 
-    this.TextBox.color = 0xffffff;
+    this.TextBox.color = 0x000000;
     // this.TextBox.outlineColor = 0xc825fa;
-    this.TextBox.outlineColor = 0x8925fa;
-    this.TextBox.outlineBlur = "5%";
+    // this.TextBox.outlineColor = 0x8925fa;
+    // this.TextBox.outlineBlur = "5%";
 
     this.TextBox.maxWidth = 1;
     this.TextBox.sync();
@@ -197,31 +214,25 @@ export default class TuppuView extends Croquet.View {
     this.TextBox.text = newString == "" ? INTRO_TEXT : newString;
     this.TextBox.sync();
   }
-
-  setAsOwner() {
-    console.log(`tuppu: setting this instance as owner, ${this.viewId}`);
-    State.isOwner = true;
-    this.resetTextPos(); // first time setup
-  }
-
   reposition(data) {
-    const tempCamVec = new Vector3().fromArray(data.tempCamVecArr);
-    const tempFrontVec = new Vector3().fromArray(data.tempFrontVecArr);
-
-    this.camProxy.position.copy(tempCamVec);
-    this.TextBox.position.copy(tempFrontVec);
-    this.TextBox.lookAt(this.camProxy.position);
-    this.TextBox.anchorX = "center";
+    if (
+      !State.isFocused ||
+      !this._controller1 ||
+      !this._controller2 ||
+      this._controller1._isGrabbing ||
+      this._controller2._isGrabbing
+    )
+      return;
+    const tv = new Vector3().fromArray(data.tpva);
+    const tq = new Quaternion().fromArray(data.tpqa);
+    this.TextBox.position.copy(tv);
+    this.TextBox.quaternion.copy(tq);
   }
+
   async asyncUpdateText(e) {
-    if (!State.isOwner) return; // only owner can write
+    if (!State.isFocused) return;
     await this.handleLocalInput(e);
     this.publish("tuppomodel", "update-text-model", State.currentText);
-  }
-
-  initOwnerID() {
-    console.log(`tuppu: your ownerID: ${this.viewId}`);
-    this.publish("tuppomodel", "set-ownerid", this.viewId);
   }
   syncState() {
     if (this.sceneModel.textString != "") {
@@ -241,9 +252,15 @@ export default class TuppuView extends Croquet.View {
       State.fontSize = this.sceneModel.fontSize;
       this.updateTextSize(State.fontSize);
     }
+
+    if (this.sceneModel.isFocused) {
+      this.changeFocus(this.sceneModel.isFocused);
+    }
   }
 
   broadcastFontArrIndexUpdate(dir) {
+    if (!State.isFocused) return;
+
     if (State.fontArrIndex + dir > fontArr.length - 1) {
       State.fontArrIndex = 0;
     } else if (State.fontArrIndex + dir < 0) {
@@ -253,6 +270,8 @@ export default class TuppuView extends Croquet.View {
   }
 
   broadcastFontSizeUpdate(dir) {
+    if (!State.isFocused) return;
+
     switch (dir) {
       case 1:
         State.fontSize += 0.005;
@@ -343,13 +362,75 @@ export default class TuppuView extends Croquet.View {
 
     this.frontAnchor.matrixWorld.decompose(tempFrontVec, tempQuat, tempScale);
     Camera.matrixWorld.decompose(tempCamVec, tempQuat, tempScale);
-    const tempCamVecArr = tempCamVec.toArray();
-    const tempFrontVecArr = tempFrontVec.toArray();
-    const data = { tempCamVecArr, tempFrontVecArr };
-    this.publish("tuppomodel", "reposition", data);
+    this.camProxy.position.copy(tempCamVec);
+    this.TextBox.position.copy(tempFrontVec);
+    this.TextBox.lookAt(this.camProxy.position);
+    this.TextBox.anchorX = "center";
+
+    let _tv = new Vector3();
+    let _tq = new Quaternion();
+    this.TextBox.getWorldPosition(_tv);
+    this.TextBox.getWorldQuaternion(_tq);
+    const tpva = _tv.toArray();
+    const tpqa = _tq.toArray();
+    const moveData = { tpva, tpqa };
+    this.publish("tuppomodel", "reposition", moveData);
+  }
+
+  onSelectStart(event) {
+    if (!State._dblClick) {
+      State._dblClick = true;
+      this.grabObject(this.getControllerFromInputSource(event));
+      setTimeout(
+        function () {
+          State._dblClick = false;
+        }.bind(this),
+        300
+      );
+    } else {
+      this.resetTextPos();
+      State._dblClick = false;
+    }
+  }
+  onSelectEnd(event) {
+    this.releaseObject(this.getControllerFromInputSource(event));
+  }
+
+  releaseObject(controller) {
+    if (controller._grabbedObj) {
+      controller._isGrabbing = false;
+      this.scene.attach(controller._grabbedObj);
+    }
+  }
+
+  grabObject(controller) {
+    console.log(controller._raycastAt);
+    if (
+      controller._raycastAt != undefined &&
+      controller._raycastAt.type == "Mesh"
+    ) {
+      controller._isGrabbing = true;
+      controller.attach(controller._raycastAt);
+      this.publish("tuppomodel", "change-focus", true);
+      controller._grabbedObj = controller._raycastAt;
+    } else {
+      this.publish("tuppomodel", "change-focus", false);
+    }
+  }
+
+  changeFocus(isFocused) {
+    State.isFocused = isFocused;
+    if (isFocused) {
+      this.TextBox.material.uniforms.color1.value = new Color("#ffff00");
+      this.TextBox.material.uniforms.color2.value = new Color("#ff77ff");
+    } else {
+      this.TextBox.material.uniforms.color1.value = new Color("#31c7de");
+      this.TextBox.material.uniforms.color2.value = new Color("#de3c31");
+    }
   }
 
   initInputs() {
+    // 2D inputs
     window.addEventListener("keydown", this.asyncUpdateText.bind(this));
     window.addEventListener("mousedown", e => {
       e.preventDefault();
@@ -361,27 +442,109 @@ export default class TuppuView extends Croquet.View {
       }
     });
 
-    State.eventHandler.addEventListener("selectstart", e => {
-      if (!State.isOwner) return;
+    // XR controllers
+    this._raycaster = new Raycaster();
+    this._tempMatrix = new Matrix4();
+    this._controller1 = Renderer.xr.getController(0);
+    this._controller2 = Renderer.xr.getController(1);
+    this._controller1.handedness = "left";
+    this._controller2.handedness = "right";
+    this._controllers = [this._controller1, this._controller2];
+    this._controllers.forEach(controller => {
+      controller.type = "controller";
+      controller._isGrabbing = false;
+      this.scene.add(controller);
+      this.addRayCastVisualizer(controller);
+      controller.Update = () => {
+        controller._raycastAt = this.raycast(controller);
+        this.translateRaycastModel(controller);
+        controller.children[0].material.opacity =
+          controller._raycastAt == undefined ? 0 : 1;
+        if (!controller._raycastAt) return;
 
-      if (!State._dblClick) {
-        State._dblClick = true;
-        setTimeout(
-          function () {
-            State._dblClick = false;
-          }.bind(this),
-          300
+        const d = controller.position.distanceTo(
+          controller._raycastAt.position
         );
-      } else {
-        this.resetTextPos();
-        State._dblClick = false;
-      }
+        controller.children[0].scale.setScalar(d);
+
+        controller.children[0].geometry.needsUpdate = true;
+      };
     });
+    // mat decomp for grabbedobj event broadcasting
+    this._tempMatrix = new Matrix4();
+    this._tempPosVec = new Vector3();
+    this._tempQuat = new Quaternion();
+    this._tempSca = new Vector3();
+
+    State.eventHandler.addEventListener(
+      "selectstart",
+      this.onSelectStart.bind(this)
+    );
+    State.eventHandler.addEventListener(
+      "selectend",
+      this.onSelectEnd.bind(this)
+    );
     State.eventHandler.addEventListener("xrsessionstarted", e => {
       // hack campos bug
       setTimeout(() => {
         this.resetTextPos();
-      }, 10);
+      }, 100);
     });
+  }
+  addRayCastVisualizer(controller) {
+    const geometry = new BufferGeometry().setFromPoints([
+      new Vector3(0, 0, 0),
+      new Vector3(0, 0, -1),
+    ]);
+
+    const mat = new LineBasicMaterial({
+      color: 0xffff00,
+      transparent: true,
+    });
+    const line = new Line(geometry, mat);
+    line.name = "line";
+    controller.add(line.clone());
+  }
+  raycast(controller) {
+    if (!controller) {
+      console.error("no controller found!");
+      return;
+    }
+    this._tempMatrix.identity().extractRotation(controller.matrixWorld);
+    this._raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    this._raycaster.ray.direction.set(0, 0, -1).applyMatrix4(this._tempMatrix);
+
+    const intersects = this._raycaster.intersectObject(this.TextBox, true);
+    return this.getIntersections(intersects);
+  }
+
+  getIntersections(intersects) {
+    if (!intersects.length) return;
+    for (let i = 0; i < intersects.length; i++) {
+      return intersects[0].object;
+    }
+  }
+
+  translateRaycastModel(controller) {
+    if (!controller._isGrabbing) return;
+    let _tv = new Vector3();
+    let _tq = new Quaternion();
+    controller._grabbedObj.getWorldPosition(_tv);
+    controller._grabbedObj.getWorldQuaternion(_tq);
+    const tpva = _tv.toArray();
+    const tpqa = _tq.toArray();
+    const moveData = { tpva, tpqa };
+    this.publish("tuppomodel", "reposition", moveData);
+  }
+
+  getControllerFromInputSource(event) {
+    const c = this._controllers.find(
+      controller => controller.handedness === event.inputSource.handedness
+    );
+    if (!c)
+      throw Error(
+        `no controller matching event's handedness found!\n${this._controllers[0].handedness}\n${this._controllers[1].handedness}\n${event.inputSource.handedness}`
+      );
+    else return c;
   }
 }
