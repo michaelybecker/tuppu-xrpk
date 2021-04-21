@@ -62,7 +62,6 @@ State.fontSize = 0.035;
 State.currentText = "";
 State.isFocused = true;
 
-// State.isOwner = false;
 State.debugMode = false;
 
 const CURSOR_SPEED_MS = 500;
@@ -156,13 +155,11 @@ export default class TuppuView extends Croquet.View {
     }, 300);
     this.camProxy = new Object3D();
 
-    // this.initOwnerID();
     this.createTextbox();
     this.syncState();
     this.initInputs();
 
     this.subscribe("tuppoview", "update-text-view", this.handleUpdate);
-    // this.subscribe("tuppoview", "set-as-owner", this.setAsOwner);
     this.subscribe("tuppoview", "reposition", this.reposition);
     this.subscribe("tuppoview", "reset-height", this.resetHeight);
     this.subscribe("tuppoview", "update-text-font", this.updateTextFont);
@@ -209,6 +206,8 @@ export default class TuppuView extends Croquet.View {
       }
       cursorVisible = !cursorVisible;
     }, CURSOR_SPEED_MS);
+
+    this.resetTextPos();
   }
   handleUpdate(newString) {
     this.TextBox.text = newString == "" ? INTRO_TEXT : newString;
@@ -321,8 +320,6 @@ export default class TuppuView extends Croquet.View {
                 resolve();
               });
             } else if (e.key == "x") {
-              //   navigator.clipboard.writeText(State.currentText);
-              //   navigator.clipboard.readText().then(clipText => {
               State.currentText = "";
               console.warn("tuppu: clear text");
               resolve();
@@ -355,6 +352,12 @@ export default class TuppuView extends Croquet.View {
   }
 
   resetTextPos() {
+    if (!State.isFocused) return;
+
+    // const a = new Object3D();
+    // a.applyMatrix4(Camera.matrixWorld);
+    // console.log(a.position);
+
     const tempCamVec = new Vector3();
     const tempFrontVec = new Vector3();
     const tempQuat = new Quaternion();
@@ -362,6 +365,8 @@ export default class TuppuView extends Croquet.View {
 
     this.frontAnchor.matrixWorld.decompose(tempFrontVec, tempQuat, tempScale);
     Camera.matrixWorld.decompose(tempCamVec, tempQuat, tempScale);
+    console.log(tempCamVec);
+    console.log(tempFrontVec);
     this.camProxy.position.copy(tempCamVec);
     this.TextBox.position.copy(tempFrontVec);
     this.TextBox.lookAt(this.camProxy.position);
@@ -404,7 +409,6 @@ export default class TuppuView extends Croquet.View {
   }
 
   grabObject(controller) {
-    console.log(controller._raycastAt);
     if (
       controller._raycastAt != undefined &&
       controller._raycastAt.type == "Mesh"
@@ -488,7 +492,7 @@ export default class TuppuView extends Croquet.View {
       // hack campos bug
       setTimeout(() => {
         this.resetTextPos();
-      }, 100);
+      }, 400);
     });
   }
   addRayCastVisualizer(controller) {
